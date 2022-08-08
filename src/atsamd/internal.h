@@ -9,6 +9,8 @@
 #include "samd21.h"
 #elif CONFIG_MACH_SAMD51
 #include "samd51.h"
+#elif CONFIG_MACH_SAME51
+#include "same51.h"
 #endif
 
 #define GPIO(PORT, NUM) (((PORT)-'A') * 32 + (NUM))

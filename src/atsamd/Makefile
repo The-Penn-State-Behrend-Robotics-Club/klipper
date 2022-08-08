@@ -6,11 +6,13 @@ CROSS_PREFIX=arm-none-eabi-
 dirs-y += src/atsamd src/generic
 dirs-$(CONFIG_MACH_SAMD21) += lib/samd21/samd21a/gcc
 dirs-$(CONFIG_MACH_SAMD51) += lib/samd51/samd51a/gcc
+dirs-$(CONFIG_MACH_SAME51) += lib/same51/same51a/gcc
 
 MCU := $(shell echo $(CONFIG_MCU) | tr a-z A-Z)
 
 CFLAGS-$(CONFIG_MACH_SAMD21) += -mcpu=cortex-m0plus -Ilib/samd21/samd21a/include
 CFLAGS-$(CONFIG_MACH_SAMD51) += -mcpu=cortex-m4 -Ilib/samd51/samd51a/include
+CFLAGS-$(CONFIG_MACH_SAME51) += -mcpu=cortex-m4 -Ilib/same51/same51a/include
 CFLAGS += $(CFLAGS-y) -D__$(MCU)__ -mthumb -Ilib/cmsis-core
 
 CFLAGS_klipper.elf += --specs=nano.specs --specs=nosys.specs
@@ -31,6 +33,8 @@ src-$(CONFIG_MACH_SAMD21) += atsamd/watchdog.c
 src-$(CONFIG_MACH_SAMD21) += atsamd/clock.c atsamd/timer.c generic/timer_irq.c
 src-$(CONFIG_MACH_SAMD51) += atsamd/samd51_watchdog.c
 src-$(CONFIG_MACH_SAMD51) += atsamd/samd51_clock.c generic/armcm_timer.c
+src-$(CONFIG_MACH_SAME51) += atsamd/samd51_watchdog.c
+src-$(CONFIG_MACH_SAME51) += atsamd/samd51_clock.c generic/armcm_timer.c
 
 # Build the additional hex and bin output files
 target-y += $(OUT)klipper.bin $(OUT)klipper.elf.hex
@@ -50,6 +54,7 @@ lib/bossac/bin/bossac:
 
 BOSSAC_OFFSET-$(CONFIG_MACH_SAMD21) := 0x2000
 BOSSAC_OFFSET-$(CONFIG_MACH_SAMD51) := 0x4000
+BOSSAC_OFFSET-$(CONFIG_MACH_SAME51) := 0x4000
 
 flash: $(OUT)klipper.bin lib/bossac/bin/bossac
 	@echo "  Flashing $< to $(FLASH_DEVICE)"

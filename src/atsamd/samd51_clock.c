@@ -1,4 +1,4 @@
-// Code to setup peripheral clocks on the SAMD51
+// Code to setup peripheral clocks on the SAMD51/SAME51
 //
 // Copyright (C) 2018-2019  Kevin O'Connor <kevin@koconnor.net>
 //
