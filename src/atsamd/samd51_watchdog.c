@@ -1,4 +1,4 @@
-// Watchdog handler on SAMD21 boards
+// Watchdog handler on SAMD51/SAME51 boards
 //
 // Copyright (C) 2018-2019  Kevin O'Connor <kevin@koconnor.net>
 //

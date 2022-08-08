@@ -1,4 +1,4 @@
-// Hardware PWM support on samd21
+// Hardware PWM support on samd
 //
 // Copyright (C) 2018-2019  Kevin O'Connor <kevin@koconnor.net>
 //
