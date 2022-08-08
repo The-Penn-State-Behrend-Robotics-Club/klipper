@@ -9,7 +9,7 @@ config ATSAMD_SELECT
     select HAVE_GPIO_ADC
     select HAVE_GPIO_I2C
     select HAVE_GPIO_SPI
-    select HAVE_GPIO_HARD_PWM if MACH_SAMD21
+    select HAVE_GPIO_HARD_PWM
     select HAVE_GPIO_BITBANGING
     select HAVE_STRICT_TIMING
     select HAVE_CHIPID
@@ -49,7 +49,7 @@ choice
         bool "SAMD51P20 (Adafruit Grand Central)"
         select MACH_SAMD51
     config MACH_SAME51J19
-        bool "SAME51J19"
+        bool "SAME51J19 (Adafruit Feather CAN)"
         select MACH_SAME51
     config MACH_SAME54P20
         bool "SAME54P20"

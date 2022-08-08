@@ -18,6 +18,11 @@ static const struct tcc_info_s tcc_info[] = {
     { TCC0, TCC0_GCLK_ID, ID_TCC0 },
     { TCC1, TCC1_GCLK_ID, ID_TCC1 },
     { TCC2, TCC2_GCLK_ID, ID_TCC2 },
+    #if CONFIG_MACH_SAMD51 || CONFIG_MACH_SAME51
+    { TCC3, TCC3_GCLK_ID, ID_TCC3 },
+    { TCC4, TCC4_GCLK_ID, ID_TCC4 },
+    // TODO: Implement TC's in addition to the TCC's
+    #endif
 };
 
 // PWM pins and their TCC device/channel
@@ -25,6 +30,7 @@ struct gpio_pwm_info {
     uint8_t gpio, ptype, tcc, channel;
 };
 static const struct gpio_pwm_info pwm_regs[] = {
+#if CONFIG_MACH_SAMD21
     { GPIO('A', 4),  'E', 0, 0 },
     { GPIO('A', 5),  'E', 0, 1 },
     { GPIO('A', 6),  'E', 1, 0 },
@@ -45,6 +51,30 @@ static const struct gpio_pwm_info pwm_regs[] = {
     { GPIO('A', 31), 'E', 1, 1 },
     { GPIO('B', 30), 'E', 0, 0 },
     { GPIO('B', 31), 'E', 0, 1 },
+#elif CONFIG_MACH_SAMD51 || CONFIG_MACH_SAME51
+    // { GPIO('A', 4),  'E', 5, 0 }, // TC
+    // { GPIO('A', 6),  'E', 6, 0 }, // TC
+    // { GPIO('A', 12), 'E', 7, 0 }, // TC
+    // { GPIO('A', 13), 'E', 7, 1 }, // TC, Tied to A12
+    // { GPIO('A', 14), 'E', 8, 0 }, // TC
+    { GPIO('A', 16), 'F', 1, 0 },
+    { GPIO('A', 17), 'F', 1, 1 },
+    { GPIO('A', 18), 'F', 1, 2 },
+    { GPIO('A', 19), 'F', 1, 3 },
+    { GPIO('A', 20), 'G', 0, 0 },
+    { GPIO('A', 21), 'G', 0, 1 },
+    { GPIO('A', 22), 'G', 0, 2 },
+    { GPIO('A', 23), 'G', 0, 3 },
+    { GPIO('B', 2),  'F', 2, 2 },
+    // { GPIO('B', 8),  'E', 9, 0 }, // TC
+    // { GPIO('B', 9),  'E', 9, 1 }, // TC, Tied to B8
+    { GPIO('B', 12), 'F', 3, 0 },
+    { GPIO('B', 13), 'F', 3, 1 },
+    { GPIO('B', 14), 'F', 4, 0 },
+    { GPIO('B', 15), 'F', 4, 1 },
+    { GPIO('B', 16), 'G', 0, 4 },
+    { GPIO('B', 17), 'G', 0, 5 },
+#endif
 };
 
 #define MAX_PWM 255
