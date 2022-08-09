@@ -75,11 +75,11 @@ static const struct gpio_pwm_info pwm_regs[] = {
     { GPIO('B', 30), 'E', 0, 0 },
     { GPIO('B', 31), 'E', 0, 1 },
 #elif CONFIG_MACH_SAMD51 || CONFIG_MACH_SAME51
-    // { GPIO('A', 4),  'E', 5, 0 }, // TC
-    // { GPIO('A', 6),  'E', 6, 0 }, // TC
-    // { GPIO('A', 12), 'E', 7, 0 }, // TC
-    // { GPIO('A', 13), 'E', 7, 1 }, // TC, Tied to A12
-    // { GPIO('A', 14), 'E', 8, 0 }, // TC
+    { GPIO('A', 4),  'E', 5, 0 }, // TC
+    { GPIO('A', 6),  'E', 6, 0 }, // TC
+    { GPIO('A', 12), 'E', 7, 0 }, // TC
+    { GPIO('A', 13), 'E', 7, 1 }, // TC, Tied to A12
+    { GPIO('A', 14), 'E', 8, 0 }, // TC
     { GPIO('A', 16), 'F', 1, 0 },
     { GPIO('A', 17), 'F', 1, 1 },
     { GPIO('A', 18), 'F', 1, 2 },
@@ -89,8 +89,8 @@ static const struct gpio_pwm_info pwm_regs[] = {
     { GPIO('A', 22), 'G', 0, 2 },
     { GPIO('A', 23), 'G', 0, 3 },
     { GPIO('B', 2),  'F', 2, 2 },
-    // { GPIO('B', 8),  'E', 9, 0 }, // TC
-    // { GPIO('B', 9),  'E', 9, 1 }, // TC, Tied to B8
+    { GPIO('B', 8),  'E', 9, 0 }, // TC
+    { GPIO('B', 9),  'E', 9, 1 }, // TC, Tied to B8
     { GPIO('B', 12), 'F', 3, 0 },
     { GPIO('B', 13), 'F', 3, 1 },
     { GPIO('B', 14), 'F', 4, 0 },
@@ -102,6 +102,78 @@ static const struct gpio_pwm_info pwm_regs[] = {
 
 #define MAX_PWM 255
 DECL_CONSTANT("PWM_MAX", MAX_PWM);
+
+uint32_t
+generate_clock_divisor(uint32_t cycle_time)
+{
+    // Map cycle_time to pwm clock divisor
+    switch (cycle_time) {
+    case                      0 ...      (1+2) * MAX_PWM / 2 - 1: return 0;
+    case    (1+2) * MAX_PWM / 2 ...      (2+4) * MAX_PWM / 2 - 1: return 1;
+    case    (2+4) * MAX_PWM / 2 ...      (4+8) * MAX_PWM / 2 - 1: return 2;
+    case    (4+8) * MAX_PWM / 2 ...     (8+16) * MAX_PWM / 2 - 1: return 3;
+    case   (8+16) * MAX_PWM / 2 ...    (16+64) * MAX_PWM / 2 - 1: return 4;
+    case  (16+64) * MAX_PWM / 2 ...   (64+256) * MAX_PWM / 2 - 1: return 5;
+    case (64+256) * MAX_PWM / 2 ... (256+1024) * MAX_PWM / 2 - 1: return 6;
+    default:                                                      return 7;
+    }
+}
+
+struct gpio_pwm
+tcc_setup(uint8_t tcc_id, uint8_t channel, uint32_t cycle_time)
+{
+    // Enable timer clock
+    enable_pclock(tcc_info[tcc_id].pclk_id, tcc_info[tcc_id].pm_id);
+
+    uint32_t cs = generate_clock_divisor(cycle_time);
+    uint32_t ctrla = TCC_CTRLA_ENABLE | TCC_CTRLA_PRESCALER(cs);
+
+    // Enable timer
+    Tcc *tcc = tcc_info[tcc_id].tcc;
+    uint32_t old_ctrla = tcc->CTRLA.reg;
+    if (old_ctrla != ctrla) {
+        if (old_ctrla & TCC_CTRLA_ENABLE)
+            shutdown("PWM already programmed at different speed");
+        tcc->CTRLA.reg = ctrla & ~TCC_CTRLA_ENABLE;
+        tcc->WAVE.reg = TCC_WAVE_WAVEGEN_NPWM;
+        tcc->PER.reg = MAX_PWM;
+        tcc->CTRLA.reg = ctrla;
+    }
+
+    // Return pwm access
+    #if CONFIG_MACH_SAMD21
+    return (struct gpio_pwm) { (void*)&tcc->CCB[channel].reg };
+    #elif CONFIG_MACH_SAMD51 || CONFIG_MACH_SAME51
+    return (struct gpio_pwm) { (void*)&tcc->CCBUF[channel].reg };
+    #endif
+}
+
+#ifdef TC_OFFSET
+struct gpio_pwm
+tc_setup(uint8_t tc_id, uint8_t channel, uint32_t cycle_time)
+{
+    // Enable timer clock
+    enable_pclock(tc_info[tc_id].pclk_id, tc_info[tc_id].pm_id);
+
+    uint32_t cs = generate_clock_divisor(cycle_time);
+    uint32_t ctrla = TC_CTRLA_ENABLE | TC_CTRLA_PRESCALER(cs);
+
+    // Enable timer
+    TcCount8 *tc = &tc_info[tc_id].tc->COUNT8;
+    uint32_t old_ctrla = tc->CTRLA.reg;
+    if (old_ctrla != ctrla) {
+        if (old_ctrla & TC_CTRLA_ENABLE)
+            shutdown("PWM already programmed at different speed");
+        tc->CTRLA.reg = ctrla & ~TC_CTRLA_ENABLE;
+        tc->WAVE.reg = TC_WAVE_WAVEGEN_NPWM;
+        tc->PER.reg = MAX_PWM;
+        tc->CTRLA.reg = ctrla;
+    }
+
+    // Return pwm access
+    return (struct gpio_pwm) { (void*)&tc->CCBUF[channel].reg };
+}
+#endif
 
 struct gpio_pwm
 gpio_pwm_setup(uint8_t pin, uint32_t cycle_time, uint8_t val)
@@ -115,74 +187,19 @@ gpio_pwm_setup(uint8_t pin, uint32_t cycle_time, uint8_t val)
             break;
     }
 
-    // Enable timer clock
+    struct gpio_pwm g;
+
+    // Initialize pwm hardware
     #ifdef TC_OFFSET
     if (p->tcc < TC_OFFSET) // TCC's end at 4, TC's start at 5
     #endif
-        enable_pclock(tcc_info[p->tcc].pclk_id, tcc_info[p->tcc].pm_id);
+        g = tcc_setup(p->tcc, p->channel, cycle_time);
     #ifdef TC_OFFSET
     else
-        enable_pclock(tc_info[p->tcc - TC_OFFSET].pclk_id, tc_info[p->tcc - TC_OFFSET].pm_id);
+        g = tc_setup(p->tcc - TC_OFFSET, p->channel, cycle_time);
     #endif
 
-    // Map cycle_time to pwm clock divisor
-    uint32_t cs;
-    switch (cycle_time) {
-    case                      0 ...      (1+2) * MAX_PWM / 2 - 1: cs = 0; break;
-    case    (1+2) * MAX_PWM / 2 ...      (2+4) * MAX_PWM / 2 - 1: cs = 1; break;
-    case    (2+4) * MAX_PWM / 2 ...      (4+8) * MAX_PWM / 2 - 1: cs = 2; break;
-    case    (4+8) * MAX_PWM / 2 ...     (8+16) * MAX_PWM / 2 - 1: cs = 3; break;
-    case   (8+16) * MAX_PWM / 2 ...    (16+64) * MAX_PWM / 2 - 1: cs = 4; break;
-    case  (16+64) * MAX_PWM / 2 ...   (64+256) * MAX_PWM / 2 - 1: cs = 5; break;
-    case (64+256) * MAX_PWM / 2 ... (256+1024) * MAX_PWM / 2 - 1: cs = 6; break;
-    default:                                                      cs = 7; break;
-    }
-
-    struct gpio_pwm g;
-
-    #ifdef TC_OFFSET
-    if (p->tcc < TC_OFFSET) { // TCC's end at 4, TC's start at 5
-    #endif
-        uint32_t ctrla = TCC_CTRLA_ENABLE | TCC_CTRLA_PRESCALER(cs);
-
-        // Enable timer
-        Tcc *tcc = tcc_info[p->tcc].tcc;
-        uint32_t old_ctrla = tcc->CTRLA.reg;
-        if (old_ctrla != ctrla) {
-            if (old_ctrla & TCC_CTRLA_ENABLE)
-                shutdown("PWM already programmed at different speed");
-            tcc->CTRLA.reg = ctrla & ~TCC_CTRLA_ENABLE;
-            tcc->WAVE.reg = TCC_WAVE_WAVEGEN_NPWM;
-            tcc->PER.reg = MAX_PWM;
-            tcc->CTRLA.reg = ctrla;
-        }
-
-        // Set initial value
-        #if CONFIG_MACH_SAMD21
-        g = (struct gpio_pwm) { (void*)&tcc->CCB[p->channel].reg };
-        #elif CONFIG_MACH_SAMD51 || CONFIG_MACH_SAME51
-        g = (struct gpio_pwm) { (void*)&tcc->CCBUF[p->channel].reg };
-        #endif
-    #ifdef TC_OFFSET
-    } else {
-        uint32_t ctrla = TC_CTRLA_ENABLE | TC_CTRLA_PRESCALER(cs);
-
-        // Enable timer
-        TcCount8 *tc = &tc_info[p->tcc - TC_OFFSET].tc->COUNT8;
-        uint32_t old_ctrla = tc->CTRLA.reg;
-        if (old_ctrla != ctrla) {
-            if (old_ctrla & TC_CTRLA_ENABLE)
-                shutdown("PWM already programmed at different speed");
-            tc->CTRLA.reg = ctrla & ~TC_CTRLA_ENABLE;
-            tc->WAVE.reg = TC_WAVE_WAVEGEN_NPWM;
-            tc->PER.reg = MAX_PWM;
-            tc->CTRLA.reg = ctrla;
-        }
-
-        // Set initial value
-        g = (struct gpio_pwm) { (void*)&tc->CCBUF[p->channel].reg };
-    }
-    #endif
+    // Set initial value
     gpio_pwm_write(g, val);
 
     // Route output to pin
