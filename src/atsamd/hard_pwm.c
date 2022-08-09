@@ -18,12 +18,35 @@ static const struct tcc_info_s tcc_info[] = {
     { TCC0, TCC0_GCLK_ID, ID_TCC0 },
     { TCC1, TCC1_GCLK_ID, ID_TCC1 },
     { TCC2, TCC2_GCLK_ID, ID_TCC2 },
-    #if CONFIG_MACH_SAMD51 || CONFIG_MACH_SAME51
+    #if CONFIG_MACH_SAMD51J19 || CONFIG_MACH_SAMD51N19 || CONFIG_MACH_SAMD51P19 || CONFIG_MACH_SAME51J19
     { TCC3, TCC3_GCLK_ID, ID_TCC3 },
     { TCC4, TCC4_GCLK_ID, ID_TCC4 },
-    // TODO: Implement TC's in addition to the TCC's
     #endif
 };
+
+#if CONFIG_MACH_SAMD51 || CONFIG_MACH_SAME51
+#define TC_OFFSET 5
+
+// Available TC devices
+struct tc_info_s {
+    Tc *tc;
+    uint32_t pclk_id, pm_id;
+};
+static const struct tc_info_s tc_info[] = {
+    { TC0, TC0_GCLK_ID, ID_TC0 },
+    { TC1, TC1_GCLK_ID, ID_TC1 },
+    { TC2, TC2_GCLK_ID, ID_TC2 },
+    { TC3, TC3_GCLK_ID, ID_TC3 },
+    #if CONFIG_MACH_SAMD51J19 || CONFIG_MACH_SAMD51N19 || CONFIG_MACH_SAMD51P20 || CONFIG_MACH_SAME51J19
+    { TC4, TC4_GCLK_ID, ID_TC4 },
+    { TC5, TC5_GCLK_ID, ID_TC5 },
+    #if CONFIG_MACH_SAMD51N19 || CONFIG_MACH_SAMD51P20
+    { TC6, TC6_GCLK_ID, ID_TC6 },
+    { TC7, TC7_GCLK_ID, ID_TC7 },
+    #endif
+    #endif
+};
+#endif
 
 // PWM pins and their TCC device/channel
 struct gpio_pwm_info {
@@ -93,7 +116,14 @@ gpio_pwm_setup(uint8_t pin, uint32_t cycle_time, uint8_t val)
     }
 
     // Enable timer clock
-    enable_pclock(tcc_info[p->tcc].pclk_id, tcc_info[p->tcc].pm_id);
+    #ifdef TC_OFFSET
+    if (p->tcc < TC_OFFSET) // TCC's end at 4, TC's start at 5
+    #endif
+        enable_pclock(tcc_info[p->tcc].pclk_id, tcc_info[p->tcc].pm_id);
+    #ifdef TC_OFFSET
+    else
+        enable_pclock(tc_info[p->tcc - TC_OFFSET].pclk_id, tc_info[p->tcc - TC_OFFSET].pm_id);
+    #endif
 
     // Map cycle_time to pwm clock divisor
     uint32_t cs;
@@ -107,22 +137,52 @@ gpio_pwm_setup(uint8_t pin, uint32_t cycle_time, uint8_t val)
     case (64+256) * MAX_PWM / 2 ... (256+1024) * MAX_PWM / 2 - 1: cs = 6; break;
     default:                                                      cs = 7; break;
     }
-    uint32_t ctrla = TCC_CTRLA_ENABLE | TCC_CTRLA_PRESCALER(cs);
 
-    // Enable timer
-    Tcc *tcc = tcc_info[p->tcc].tcc;
-    uint32_t old_ctrla = tcc->CTRLA.reg;
-    if (old_ctrla != ctrla) {
-        if (old_ctrla & TCC_CTRLA_ENABLE)
-            shutdown("PWM already programmed at different speed");
-        tcc->CTRLA.reg = ctrla & ~TCC_CTRLA_ENABLE;
-        tcc->WAVE.reg = TCC_WAVE_WAVEGEN_NPWM;
-        tcc->PER.reg = MAX_PWM;
-        tcc->CTRLA.reg = ctrla;
+    struct gpio_pwm g;
+
+    #ifdef TC_OFFSET
+    if (p->tcc < TC_OFFSET) { // TCC's end at 4, TC's start at 5
+    #endif
+        uint32_t ctrla = TCC_CTRLA_ENABLE | TCC_CTRLA_PRESCALER(cs);
+
+        // Enable timer
+        Tcc *tcc = tcc_info[p->tcc].tcc;
+        uint32_t old_ctrla = tcc->CTRLA.reg;
+        if (old_ctrla != ctrla) {
+            if (old_ctrla & TCC_CTRLA_ENABLE)
+                shutdown("PWM already programmed at different speed");
+            tcc->CTRLA.reg = ctrla & ~TCC_CTRLA_ENABLE;
+            tcc->WAVE.reg = TCC_WAVE_WAVEGEN_NPWM;
+            tcc->PER.reg = MAX_PWM;
+            tcc->CTRLA.reg = ctrla;
+        }
+
+        // Set initial value
+        #if CONFIG_MACH_SAMD21
+        g = (struct gpio_pwm) { (void*)&tcc->CCB[p->channel].reg };
+        #elif CONFIG_MACH_SAMD51 || CONFIG_MACH_SAME51
+        g = (struct gpio_pwm) { (void*)&tcc->CCBUF[p->channel].reg };
+        #endif
+    #ifdef TC_OFFSET
+    } else {
+        uint32_t ctrla = TC_CTRLA_ENABLE | TC_CTRLA_PRESCALER(cs);
+
+        // Enable timer
+        TcCount8 *tc = &tc_info[p->tcc - TC_OFFSET].tc->COUNT8;
+        uint32_t old_ctrla = tc->CTRLA.reg;
+        if (old_ctrla != ctrla) {
+            if (old_ctrla & TC_CTRLA_ENABLE)
+                shutdown("PWM already programmed at different speed");
+            tc->CTRLA.reg = ctrla & ~TC_CTRLA_ENABLE;
+            tc->WAVE.reg = TC_WAVE_WAVEGEN_NPWM;
+            tc->PER.reg = MAX_PWM;
+            tc->CTRLA.reg = ctrla;
+        }
+
+        // Set initial value
+        g = (struct gpio_pwm) { (void*)&tc->CCBUF[p->channel].reg };
     }
-
-    // Set initial value
-    struct gpio_pwm g = (struct gpio_pwm) { (void*)&tcc->CCB[p->channel].reg };
+    #endif
     gpio_pwm_write(g, val);
 
     // Route output to pin
