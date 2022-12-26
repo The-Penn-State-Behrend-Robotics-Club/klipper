@@ -5,10 +5,12 @@
 //
 // This file may be distributed under the terms of the GNU GPLv3 license.
 
+#include "board/armcm_boot.h"
 #include "internal.h" // sercom_enable
 #include "command.h" // shutdown
 #include "compiler.h" // ARRAY_SIZE
 #include "sched.h" // sched_shutdown
+#include "usartcmds.h" // UF_HAVE_XCK
 
 
 /****************************************************************
@@ -20,20 +22,31 @@ DECL_ENUMERATION_RANGE("bus", "sercom0", 0, 8);
 struct sercom_bus {
     Sercom *sercom;
     uint32_t pclk_id, pm_id;
+    #if CONFIG_MACH_SAMD21
+    enum IRQn interrupt;
+    #elif CONFIG_MACH_SAMD51 || CONFIG_MACH_SAME51
+    enum IRQn interrupts[4];
+    #endif
 };
 
+#if CONFIG_MACH_SAMD21
+#define SERCOMx_IRQn(id) SERCOM##id##_IRQn
+#elif CONFIG_MACH_SAMD51 || CONFIG_MACH_SAME51
+#define SERCOMx_IRQn(id) { SERCOM##id##_0_IRQn, SERCOM##id##_1_IRQn, SERCOM##id##_2_IRQn, SERCOM##id##_3_IRQn }
+#endif
+
 static const struct sercom_bus sercoms[] = {
-    { SERCOM0, SERCOM0_GCLK_ID_CORE, ID_SERCOM0 },
-    { SERCOM1, SERCOM1_GCLK_ID_CORE, ID_SERCOM1 },
-    { SERCOM2, SERCOM2_GCLK_ID_CORE, ID_SERCOM2 },
-    { SERCOM3, SERCOM3_GCLK_ID_CORE, ID_SERCOM3 },
+    { SERCOM0, SERCOM0_GCLK_ID_CORE, ID_SERCOM0, SERCOMx_IRQn(0) },
+    { SERCOM1, SERCOM1_GCLK_ID_CORE, ID_SERCOM1, SERCOMx_IRQn(1) },
+    { SERCOM2, SERCOM2_GCLK_ID_CORE, ID_SERCOM2, SERCOMx_IRQn(2) },
+    { SERCOM3, SERCOM3_GCLK_ID_CORE, ID_SERCOM3, SERCOMx_IRQn(3) },
 #ifdef SERCOM4
-    { SERCOM4, SERCOM4_GCLK_ID_CORE, ID_SERCOM4 },
-    { SERCOM5, SERCOM5_GCLK_ID_CORE, ID_SERCOM5 },
+    { SERCOM4, SERCOM4_GCLK_ID_CORE, ID_SERCOM4, SERCOMx_IRQn(4) },
+    { SERCOM5, SERCOM5_GCLK_ID_CORE, ID_SERCOM5, SERCOMx_IRQn(5) },
 #endif
 #ifdef SERCOM6
-    { SERCOM6, SERCOM6_GCLK_ID_CORE, ID_SERCOM6 },
-    { SERCOM7, SERCOM7_GCLK_ID_CORE, ID_SERCOM7 },
+    { SERCOM6, SERCOM6_GCLK_ID_CORE, ID_SERCOM6, SERCOMx_IRQn(6) },
+    { SERCOM7, SERCOM7_GCLK_ID_CORE, ID_SERCOM7, SERCOMx_IRQn(7) },
 #endif
 };
 
@@ -314,6 +327,109 @@ command_set_sercom_pin(uint32_t *args)
 DECL_COMMAND(command_set_sercom_pin,
              "set_sercom_pin bus=%u sercom_pin_type=%u pin=%u");
 
+void
+nothing(void)
+{
+
+}
+
+void (*SERCOM_App_Handlers[CONFIG_SERCOMS])(uint32_t sercom_id) = { NULL }; 
+
+// void
+// SERCOM0_HANDLER(void) {
+//     if (SERCOM_App_Handlers[0] != NULL)
+//         (*SERCOM_App_Handlers[0])(0);
+// }
+
+void
+SERCOM1_HANDLER(void)
+{
+    if (SERCOM_App_Handlers[1] != NULL)
+        (*SERCOM_App_Handlers[1])(1);
+}
+
+void
+SERCOM2_HANDLER(void)
+{
+    if (SERCOM_App_Handlers[2] != NULL)
+        (*SERCOM_App_Handlers[2])(2);
+}
+
+void
+SERCOM3_HANDLER(void)
+{
+    if (SERCOM_App_Handlers[3] != NULL)
+        (*SERCOM_App_Handlers[3])(3);
+}
+
+#ifdef SERCOM4
+void
+SERCOM4_HANDLER(void)
+{
+    if (SERCOM_App_Handlers[4] != NULL)
+        (*SERCOM_App_Handlers[4])(4);
+}
+
+void
+SERCOM5_HANDLER(void)
+{
+    if (SERCOM_App_Handlers[5] != NULL)
+        (*SERCOM_App_Handlers[5])(5);
+}
+#endif
+#ifdef SERCOM6
+void
+SERCOM6_HANDLER(void)
+{
+    if (SERCOM_App_Handlers[6] != NULL)
+        (*SERCOM_App_Handlers[6])(6);
+}
+
+void
+SERCOM7_HANDLER(void)
+{
+    if (SERCOM_App_Handlers[7] != NULL)
+        (*SERCOM_App_Handlers[7])(7);
+}
+#endif
+
+#if CONFIG_MACH_SAMD21
+  #define sercom_set_irq_handler(sercom_id) armcm_enable_irq(SERCOM##sercom_id##_HANDLER, sercoms[sercom_id].interrupts, 0);
+#elif CONFIG_MACH_SAMD51 || CONFIG_MACH_SAME51
+  #define sercom_set_irq_handler(sercom_id) armcm_enable_irq(SERCOM##sercom_id##_HANDLER, sercoms[sercom_id].interrupts[0], 0); armcm_enable_irq(SERCOM##sercom_id##_HANDLER, sercoms[sercom_id].interrupts[1], 0); armcm_enable_irq(SERCOM##sercom_id##_HANDLER, sercoms[sercom_id].interrupts[2], 0); armcm_enable_irq(SERCOM##sercom_id##_HANDLER, sercoms[sercom_id].interrupts[3], 0);
+#endif
+
+void sercom_irq_init(void) {
+    //sercom_set_irq_handler(0); // Interferes with serial handler, needs to be dynamically disabled based on
+    sercom_set_irq_handler(1);
+    sercom_set_irq_handler(2);
+    sercom_set_irq_handler(3);
+    #ifdef SERCOM4
+    sercom_set_irq_handler(4);
+    sercom_set_irq_handler(5);
+    #endif
+    #ifdef SERCOM6
+    sercom_set_irq_handler(6);
+    sercom_set_irq_handler(7);
+    #endif
+}
+
+
+void
+set_sercom_interrupt(uint32_t sercom_id, void (*handler)(uint32_t sercom_id))
+{
+    // Switch statement works around need for the interrupt number in armcm_enable_irq to be constant
+    if (sercom_id < CONFIG_SERCOMS) {
+        SERCOM_App_Handlers[sercom_id] = handler;
+    }
+}
+
+void
+clear_sercom_interrupt(uint32_t sercom_id)
+{
+    set_sercom_interrupt(sercom_id, NULL);
+}
+
 
 /****************************************************************
  * SPI dopo flag mapping
@@ -348,6 +464,50 @@ sercom_lookup_spi_dopo(uint8_t tx_pad, uint8_t clk_pad)
 /****************************************************************
  * Pin setup
  ****************************************************************/
+
+uint32_t
+sercom_serial_pins(uint32_t sercom_id, uint8_t tx_pin, uint8_t rx_pin) {
+    const struct sercom_pad *tx_sp = sercom_lookup_pad(sercom_id, tx_pin);
+    const struct sercom_pad *rx_sp = sercom_lookup_pad(sercom_id, rx_pin);
+
+    gpio_peripheral(tx_pin, tx_sp->ptype, 0);
+    gpio_peripheral(rx_pin, rx_sp->ptype, 0);
+
+    return SERCOM_USART_CTRLA_RXPO(rx_sp->pad) | SERCOM_USART_CTRLA_TXPO(0);
+}
+
+uint32_t
+sercom_usart_pins(uint32_t sercom_id, uint8_t mode)
+{
+    uint8_t tx_pin = sercom_pins[sercom_id].pins[TX_PIN];
+    const struct sercom_pad *tx_sp = sercom_lookup_pad(sercom_id, tx_pin);
+    uint8_t rx_pin = sercom_pins[sercom_id].pins[RX_PIN];
+    const struct sercom_pad *rx_sp = sercom_lookup_pad(sercom_id, rx_pin);
+    uint8_t clk_pin;
+    const struct sercom_pad *clk_sp;
+    if (mode & UF_HAVE_XCK) {
+      clk_pin = sercom_pins[sercom_id].pins[CLK_PIN];
+      clk_sp = sercom_lookup_pad(sercom_id, clk_pin);
+    }
+
+    // TX is 0
+    // CLK is 1 or none
+    // RX is any remaining
+
+    if (tx_sp->pad != 0 || rx_sp->pad == 0)
+        shutdown("TX pin not on PAD0 or RX pin collides with TX pin");
+    if (mode & UF_HAVE_XCK && (clk_sp->pad != 1 || rx_sp->pad == 1))
+        shutdown("CLK pin not on PAD1 or RX pin collides with CLK pin");
+
+    gpio_peripheral(tx_pin, tx_sp->ptype, 0);
+    gpio_peripheral(rx_pin, rx_sp->ptype, 0);
+    if (mode & UF_HAVE_XCK) {
+      gpio_peripheral(clk_pin, clk_sp->ptype, 0);
+    }
+    return SERCOM_USART_CTRLA_RXPO(rx_sp->pad) | SERCOM_USART_CTRLA_TXPO(0);
+}
+
+// TODO: Add definition for uart/usart pins
 
 uint32_t
 sercom_spi_pins(uint32_t sercom_id)
@@ -385,3 +545,5 @@ sercom_i2c_pins(uint32_t sercom_id)
     gpio_peripheral(tx_pin, tx_sp->ptype, 0);
     gpio_peripheral(clk_pin, clk_sp->ptype, 0);
 }
+
+DECL_INIT(sercom_irq_init);

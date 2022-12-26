@@ -36,7 +36,26 @@ uint32_t gpio_adc_sample(struct gpio_adc g);
 uint16_t gpio_adc_read(struct gpio_adc g);
 void gpio_adc_cancel_sample(struct gpio_adc g);
 
-struct spi_config {
+struct sercom_buffer {
+  uint32_t *data;
+  uint32_t len;
+  uint32_t start;
+  uint32_t end;
+};
+
+struct usart_config {
+  void *su;
+  uint32_t ctrla, baud;
+  struct sercom_buffer buffer;
+};
+struct usart_config usart_setup(uint32_t bus, uint8_t mode, uint32_t rate, struct sercom_buffer* buffer);
+void usart_write(struct usart_config config, uint8_t write_len, uint8_t *write);
+void usart_read_unbuffered(struct usart_config config, uint8_t read_len, uint8_t *read);
+void usart_set_buffer(struct usart_config config, struct sercom_buffer* buffer, uint32_t* buffer_data, uint8_t buffer_len);
+void usart_read(struct usart_config config, uint8_t read_len, uint8_t *read);
+
+struct spi_config
+{
     void *ss;
     uint32_t ctrla, baud;
 };

@@ -1,4 +1,4 @@
-# Helper code for SPI and I2C bus communication
+# Helper code for SPI, I2C, and USART bus communication
 #
 # Copyright (C) 2018,2019  Kevin O'Connor <kevin@koconnor.net>
 #
@@ -210,6 +210,71 @@ def MCU_I2C_from_config(config, default_addr=None, default_speed=100000):
     # Create MCU_I2C object
     return MCU_I2C(i2c_mcu, bus, addr, speed)
 
+
+######################################################################
+# USART
+######################################################################
+
+# Helper code for working with devices connected to an MCU via a USART bus
+class MCU_USART:
+    def __init__(self, mcu, bus, has_clock, rate):
+        self.mcu = mcu
+        self.bus = bus
+        # Configure USART object,
+        self.oid = mcu.create_oid()
+        if has_clock:
+            self.config_fmt = "config_usart oid=%d usart_bus=%%s rate=%d" % (self.oid, rate)
+        else:
+            self.config_fmt = "config_uart oid=%d uart_bus=%%s rate=%d" % (self.oid, rate)
+        self.cmd_queue = mcu.alloc_command_queue()
+        mcu.register_config_callback(self.build_config)
+        self.usart_write_cmd = self.usart_read_cmd = None
+    # def setup_shutdown_msg(self, shutdown_seq):
+    #     shutdown_msg = "".join(["%02x" % (x,) for x in shutdown_seq])
+    #     self.mcu.add_config_cmd(
+    #         "config_usart_shutdown oid=%d usart_oid=%d shutdown_msg=%s"
+    #         % (self.mcu.create_oid(), self.oid, shutdown_msg))
+    def get_oid(self):
+        return self.oid
+    def get_mcu(self):
+        return self.mcu
+    def get_command_queue(self):
+        return self.cmd_queue
+    def build_config(self):
+        bus = resolve_bus_name(self.mcu, "usart_bus", self.bus)
+        self.mcu.add_config_cmd(self.config_fmt % (bus,))
+        self.usart_write_cmd = self.mcu.lookup_command(
+            "usart_write oid=%c data=%*s", cq=self.cmd_queue)
+        self.usart_read_cmd = self.mcu.lookup_query_command(
+            "usart_read oid=%c read_len=%u",
+            "usart_read_response oid=%c response=%*s", oid=self.oid,
+            cq=self.cmd_queue)
+    def usart_write(self, data, minclock=0, reqclock=0):
+        if self.usart_write_cmd is None:
+            # Send setup message via mcu initialization
+            data_msg = "".join(["%02x" % (x,) for x in data])
+            self.mcu.add_config_cmd("usart_write oid=%d data=%s" % (
+                self.oid, data_msg), is_init=True)
+            return
+        self.usart_write_cmd.send([self.oid, data],
+                                  minclock=minclock, reqclock=reqclock)
+    def usart_read(self, read_len, minclock=0, reqclock=0):
+        return self.usart_read_cmd.send([self.oid, read_len],
+                                        minclock=minclock, reqclock=reqclock)
+
+# Helper to setup a usart bus from settings in a config section
+def MCU_USART_from_config(config, has_clock=False, default_speed=115200):
+    # Load bus parameters
+    printer = config.get_printer()
+    usart_mcu = mcu.get_printer_mcu(printer, config.get('usart_mcu', 'mcu'))
+    speed = config.getchoice('usart_speed', {item: item for item in [
+        50, 75, 110, 134, 150, 200, 300, 600, 1200, 1800, 2400, 4800,
+        9600, 19200, 28800, 38400, 57600, 76800,
+        115200, 230400, 460800, 576000, 921600
+    ]}, default_speed)
+    bus = config.get('usart_bus', None)
+    # Create MCU_USART object
+    return MCU_USART(usart_mcu, bus, has_clock, speed)
 
 ######################################################################
 # Bus synchronized digital outputs

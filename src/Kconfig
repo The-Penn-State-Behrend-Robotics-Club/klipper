@@ -110,6 +110,10 @@ config HAVE_GPIO
     bool
 config HAVE_GPIO_ADC
     bool
+    default n
+config HAVE_GPIO_USART
+    bool
+    default n
 config HAVE_GPIO_SPI
     bool
 config HAVE_GPIO_I2C
