@@ -439,6 +439,19 @@ DECL_CONSTANT_STR("RESERVE_PINS_serial", TX_PIN_NAME "," RX_PIN_NAME);
     #define SERCOM_ID 7
 #endif 
 
+#if CONFIG_MACH_SAMD21
+    #define raw_serial_enable_irq_handlers(sercom_id) \
+        armcm_enable_irq(SERCOMx_Handler, SERCOM##sercom_id##_IRQn, 0);
+#elif CONFIG_MACH_SAMX5
+    #define raw_serial_enable_irq_handlers(sercom_id) \
+        armcm_enable_irq(SERCOMx_Handler, SERCOM##sercom_id##_0_IRQn, 0); \
+        armcm_enable_irq(SERCOMx_Handler, SERCOM##sercom_id##_1_IRQn, 0); \
+        armcm_enable_irq(SERCOMx_Handler, SERCOM##sercom_id##_2_IRQn, 0); \
+        armcm_enable_irq(SERCOMx_Handler, SERCOM##sercom_id##_3_IRQn, 0);
+#endif
+// Extra definition needed to resolve parameters before name subsitution
+#define serial_enable_irq_handlers(sercom_id) raw_serial_enable_irq_handlers(sercom_id)
+
 void
 serial_init(void)
 {
@@ -462,13 +475,6 @@ serial_init(void)
     // enable irqs
     su->INTENSET.reg = SERCOM_USART_INTENSET_RXC;
     su->CTRLA.reg = areg | SERCOM_USART_CTRLA_ENABLE;
-#if CONFIG_MACH_SAMD21
-    armcm_enable_irq(SERCOMx_Handler, SERCOM0_IRQn, 0);
-#elif CONFIG_MACH_SAMX5
-    armcm_enable_irq(SERCOMx_Handler, SERCOM0_0_IRQn, 0);
-    armcm_enable_irq(SERCOMx_Handler, SERCOM0_1_IRQn, 0);
-    armcm_enable_irq(SERCOMx_Handler, SERCOM0_2_IRQn, 0);
-    armcm_enable_irq(SERCOMx_Handler, SERCOM0_3_IRQn, 0);
-#endif
+    serial_enable_irq_handlers(SERCOM_ID);
 }
 DECL_INIT(serial_init);

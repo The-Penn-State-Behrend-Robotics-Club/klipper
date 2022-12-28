@@ -22,31 +22,20 @@ DECL_ENUMERATION_RANGE("bus", "sercom0", 0, 8);
 struct sercom_bus {
     Sercom *sercom;
     uint32_t pclk_id, pm_id;
-    #if CONFIG_MACH_SAMD21
-    enum IRQn interrupt;
-    #elif CONFIG_MACH_SAMD51 || CONFIG_MACH_SAME51
-    enum IRQn interrupts[4];
-    #endif
 };
 
-#if CONFIG_MACH_SAMD21
-#define SERCOMx_IRQn(id) SERCOM##id##_IRQn
-#elif CONFIG_MACH_SAMD51 || CONFIG_MACH_SAME51
-#define SERCOMx_IRQn(id) { SERCOM##id##_0_IRQn, SERCOM##id##_1_IRQn, SERCOM##id##_2_IRQn, SERCOM##id##_3_IRQn }
-#endif
-
 static const struct sercom_bus sercoms[] = {
-    { SERCOM0, SERCOM0_GCLK_ID_CORE, ID_SERCOM0, SERCOMx_IRQn(0) },
-    { SERCOM1, SERCOM1_GCLK_ID_CORE, ID_SERCOM1, SERCOMx_IRQn(1) },
-    { SERCOM2, SERCOM2_GCLK_ID_CORE, ID_SERCOM2, SERCOMx_IRQn(2) },
-    { SERCOM3, SERCOM3_GCLK_ID_CORE, ID_SERCOM3, SERCOMx_IRQn(3) },
+    { SERCOM0, SERCOM0_GCLK_ID_CORE, ID_SERCOM0 },
+    { SERCOM1, SERCOM1_GCLK_ID_CORE, ID_SERCOM1 },
+    { SERCOM2, SERCOM2_GCLK_ID_CORE, ID_SERCOM2 },
+    { SERCOM3, SERCOM3_GCLK_ID_CORE, ID_SERCOM3 },
 #ifdef SERCOM4
-    { SERCOM4, SERCOM4_GCLK_ID_CORE, ID_SERCOM4, SERCOMx_IRQn(4) },
-    { SERCOM5, SERCOM5_GCLK_ID_CORE, ID_SERCOM5, SERCOMx_IRQn(5) },
+    { SERCOM4, SERCOM4_GCLK_ID_CORE, ID_SERCOM4 },
+    { SERCOM5, SERCOM5_GCLK_ID_CORE, ID_SERCOM5 },
 #endif
 #ifdef SERCOM6
-    { SERCOM6, SERCOM6_GCLK_ID_CORE, ID_SERCOM6, SERCOMx_IRQn(6) },
-    { SERCOM7, SERCOM7_GCLK_ID_CORE, ID_SERCOM7, SERCOMx_IRQn(7) },
+    { SERCOM6, SERCOM6_GCLK_ID_CORE, ID_SERCOM6 },
+    { SERCOM7, SERCOM7_GCLK_ID_CORE, ID_SERCOM7 },
 #endif
 };
 
@@ -86,6 +75,7 @@ static const struct sercom_pad sercom_pads[] = {
     { 0, GPIO('A', 5), 1, 'D'},
     { 0, GPIO('A', 6), 2, 'D'},
     { 0, GPIO('A', 7), 3, 'D'},
+
     { 1, GPIO('A', 16), 0, 'C'},
     { 1, GPIO('A', 17), 1, 'C'},
     { 1, GPIO('A', 18), 2, 'C'},
@@ -94,6 +84,7 @@ static const struct sercom_pad sercom_pads[] = {
     { 1, GPIO('A', 1), 1, 'D'},
     { 1, GPIO('A', 30), 2, 'D'},
     { 1, GPIO('A', 31), 3, 'D'},
+
     { 2, GPIO('A', 12), 0, 'C'},
     { 2, GPIO('A', 13), 1, 'C'},
     { 2, GPIO('A', 14), 2, 'C'},
@@ -102,6 +93,7 @@ static const struct sercom_pad sercom_pads[] = {
     { 2, GPIO('A', 9), 1, 'D'},
     { 2, GPIO('A', 10), 2, 'D'},
     { 2, GPIO('A', 11), 3, 'D'},
+
     { 3, GPIO('A', 22), 0, 'C'},
     { 3, GPIO('A', 23), 1, 'C'},
     { 3, GPIO('A', 24), 2, 'C'},
@@ -112,6 +104,7 @@ static const struct sercom_pad sercom_pads[] = {
     { 3, GPIO('A', 19), 3, 'D'},
     { 3, GPIO('A', 20), 2, 'D'},
     { 3, GPIO('A', 21), 3, 'D'},
+  #ifdef SERCOM4
     { 4, GPIO('B', 12), 0, 'C'},
     { 4, GPIO('B', 13), 1, 'C'},
     { 4, GPIO('B', 14), 2, 'C'},
@@ -124,6 +117,7 @@ static const struct sercom_pad sercom_pads[] = {
     { 4, GPIO('A', 13), 1, 'D'},
     { 4, GPIO('A', 14), 2, 'D'},
     { 4, GPIO('A', 15), 3, 'D'},
+
     { 5, GPIO('B', 16), 0, 'C'},
     { 5, GPIO('B', 17), 1, 'C'},
     { 5, GPIO('A', 20), 2, 'C'},
@@ -140,6 +134,7 @@ static const struct sercom_pad sercom_pads[] = {
     { 5, GPIO('B', 3), 1, 'D'},
     { 5, GPIO('B', 0), 2, 'D'},
     { 5, GPIO('B', 1), 3, 'D'},
+  #endif
 #elif CONFIG_MACH_SAMX5
     { 0, GPIO('A', 8), 0, 'C'},
     { 0, GPIO('A', 9), 1, 'C'},
@@ -335,11 +330,11 @@ nothing(void)
 
 void (*SERCOM_App_Handlers[CONFIG_SERCOMS])(uint32_t sercom_id) = { NULL }; 
 
-// void
-// SERCOM0_HANDLER(void) {
-//     if (SERCOM_App_Handlers[0] != NULL)
-//         (*SERCOM_App_Handlers[0])(0);
-// }
+void
+SERCOM0_HANDLER(void) {
+    if (SERCOM_App_Handlers[0] != NULL)
+        (*SERCOM_App_Handlers[0])(0);
+}
 
 void
 SERCOM1_HANDLER(void)
@@ -394,23 +389,46 @@ SERCOM7_HANDLER(void)
 #endif
 
 #if CONFIG_MACH_SAMD21
-  #define sercom_set_irq_handler(sercom_id) armcm_enable_irq(SERCOM##sercom_id##_HANDLER, sercoms[sercom_id].interrupts, 0);
+    #define sercom_set_irq_handler(sercom_id) \
+        armcm_enable_irq(SERCOM##sercom_id##_HANDLER, SERCOM##sercom_id##_IRQn, 0);
 #elif CONFIG_MACH_SAMD51 || CONFIG_MACH_SAME51
-  #define sercom_set_irq_handler(sercom_id) armcm_enable_irq(SERCOM##sercom_id##_HANDLER, sercoms[sercom_id].interrupts[0], 0); armcm_enable_irq(SERCOM##sercom_id##_HANDLER, sercoms[sercom_id].interrupts[1], 0); armcm_enable_irq(SERCOM##sercom_id##_HANDLER, sercoms[sercom_id].interrupts[2], 0); armcm_enable_irq(SERCOM##sercom_id##_HANDLER, sercoms[sercom_id].interrupts[3], 0);
+    #define sercom_set_irq_handler(sercom_id) \
+        armcm_enable_irq(SERCOM##sercom_id##_HANDLER, SERCOM##sercom_id##_0_IRQn, 0); \
+        armcm_enable_irq(SERCOM##sercom_id##_HANDLER, SERCOM##sercom_id##_1_IRQn, 0); \
+        armcm_enable_irq(SERCOM##sercom_id##_HANDLER, SERCOM##sercom_id##_2_IRQn, 0); \
+        armcm_enable_irq(SERCOM##sercom_id##_HANDLER, SERCOM##sercom_id##_3_IRQn, 0);
 #endif
 
 void sercom_irq_init(void) {
-    //sercom_set_irq_handler(0); // Interferes with serial handler, needs to be dynamically disabled based on
-    sercom_set_irq_handler(1);
-    sercom_set_irq_handler(2);
-    sercom_set_irq_handler(3);
+    // Enable handers for all channels except the one that is used for serial
+    // communication to the host controller
+    #if !CONFIG_ATSAMD_SERIAL_SERCOM0
+        sercom_set_irq_handler(0);
+    #endif
+    #if !CONFIG_ATSAMD_SERIAL_SERCOM1
+        sercom_set_irq_handler(1);
+    #endif
+    #if !CONFIG_ATSAMD_SERIAL_SERCOM2
+        sercom_set_irq_handler(2);
+    #endif
+    #if !CONFIG_ATSAMD_SERIAL_SERCOM3
+        sercom_set_irq_handler(3);
+    #endif
     #ifdef SERCOM4
-    sercom_set_irq_handler(4);
-    sercom_set_irq_handler(5);
+        #if !CONFIG_ATSAMD_SERIAL_SERCOM4
+            sercom_set_irq_handler(4);
+        #endif
+        #if !CONFIG_ATSAMD_SERIAL_SERCOM5
+            sercom_set_irq_handler(5);
+        #endif
     #endif
     #ifdef SERCOM6
-    sercom_set_irq_handler(6);
-    sercom_set_irq_handler(7);
+        #if !CONFIG_ATSAMD_SERIAL_SERCOM6
+            sercom_set_irq_handler(6);
+        #endif
+        #if !CONFIG_ATSAMD_SERIAL_SERCOM7
+            sercom_set_irq_handler(7);
+        #endif
     #endif
 }
 

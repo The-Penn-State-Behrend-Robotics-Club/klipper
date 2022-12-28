@@ -112,7 +112,7 @@ config SERCOMS
     int  # 4 for E's, 6 for G's and J's, 8 for N's and P's
     default 4 if MACH_SAMD21E15 || MACH_SAMD21E18
     default 6 if MACH_SAMD21G18 || MACH_SAMD51G19 || MACH_SAMD51J19 || MACH_SAME51J19
-    default 8 if MACH_SAMD51N19 || MACH_SAMD51P20
+    default 8 if MACH_SAMD51N19 || MACH_SAMD51P20 || MACH_SAME54P20
 
 config STACK_SIZE
     int
