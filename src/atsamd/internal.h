@@ -27,6 +27,7 @@ uint32_t get_pclock_frequency(uint32_t pclk_id); // clock.c
 void gpio_peripheral(uint32_t gpio, char ptype, int32_t pull_up); // gpio.c
 
 Sercom * sercom_enable_pclock(uint32_t sercom_id); // sercom.c
+Sercom * sercom_get_by_id(uint32_t sercom_id); // sercom.c
 uint32_t sercom_get_pclock_frequency(uint32_t sercom_id); // sercom.c
 
 void set_sercom_interrupt(uint32_t sercom_id, void (*handler)(uint32_t sercom_id)); // sercom.c

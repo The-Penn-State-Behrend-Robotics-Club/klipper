@@ -249,6 +249,12 @@ class MCU_USART:
             "usart_read oid=%c read_len=%u",
             "usart_read_response oid=%c response=%*s", oid=self.oid,
             cq=self.cmd_queue)
+        self.usart_write_unbuffered_cmd = self.mcu.lookup_command(
+            "usart_write_unbuffered oid=%c data=%*s", cq=self.cmd_queue)
+        self.usart_read_unbuffered_cmd = self.mcu.lookup_query_command(
+            "usart_read_unbuffered oid=%c read_len=%u",
+            "usart_read_response oid=%c response=%*s", oid=self.oid,
+            cq=self.cmd_queue)
     def usart_write(self, data, minclock=0, reqclock=0):
         if self.usart_write_cmd is None:
             # Send setup message via mcu initialization
@@ -261,6 +267,18 @@ class MCU_USART:
     def usart_read(self, read_len, minclock=0, reqclock=0):
         return self.usart_read_cmd.send([self.oid, read_len],
                                         minclock=minclock, reqclock=reqclock)
+    def usart_write_unbuffered(self, data, minclock=0, reqclock=0):
+        if self.usart_write_cmd is None:
+            # Send setup message via mcu initialization
+            data_msg = "".join(["%02x" % (x,) for x in data])
+            self.mcu.add_config_cmd("usart_write_unbuffered oid=%d data=%s" % (
+                self.oid, data_msg), is_init=True)
+            return
+        self.usart_write_unbuffered_cmd.send([self.oid, data],
+                                             minclock=minclock, reqclock=reqclock)
+    def usart_read_unbuffered(self, read_len, minclock=0, reqclock=0):
+        return self.usart_read_unbuffered_cmd.send([self.oid, read_len],
+                                                   minclock=minclock, reqclock=reqclock)
 
 # Helper to setup a usart bus from settings in a config section
 def MCU_USART_from_config(config, has_clock=False, default_speed=115200):

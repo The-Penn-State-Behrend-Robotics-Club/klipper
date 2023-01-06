@@ -38,20 +38,27 @@ void gpio_adc_cancel_sample(struct gpio_adc g);
 
 struct sercom_buffer {
   uint32_t *data;
-  uint32_t len;
+  uint32_t maxlen;
   uint32_t start;
-  uint32_t end;
+  uint32_t len;
 };
 
+struct usart_buffer {
+    struct sercom_buffer tx;
+    struct sercom_buffer rx;
+    int crc;
+};
 struct usart_config {
   void *su;
   uint32_t ctrla, baud;
-  struct sercom_buffer buffer;
+  struct usart_buffer* buffer;
 };
-struct usart_config usart_setup(uint32_t bus, uint8_t mode, uint32_t rate, struct sercom_buffer* buffer);
-void usart_write(struct usart_config config, uint8_t write_len, uint8_t *write);
+struct usart_config usart_setup(uint32_t bus, uint8_t mode, uint32_t rate, struct usart_buffer* buffer);
+void usart_write_unbuffered(struct usart_config config, uint8_t write_len, uint8_t *write);
 void usart_read_unbuffered(struct usart_config config, uint8_t read_len, uint8_t *read);
-void usart_set_buffer(struct usart_config config, struct sercom_buffer* buffer, uint32_t* buffer_data, uint8_t buffer_len);
+void usart_set_tx_buffer(struct usart_config config, uint32_t* buffer_data, uint8_t buffer_len);
+void usart_set_rx_buffer(struct usart_config config, uint32_t* buffer_data, uint8_t buffer_len);
+void usart_write(struct usart_config config, uint8_t write_len, uint8_t *write);
 void usart_read(struct usart_config config, uint8_t read_len, uint8_t *read);
 
 struct spi_config

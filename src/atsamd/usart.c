@@ -48,15 +48,36 @@ usart_init(uint32_t bus, SercomUsart *su, uint32_t baud, uint32_t tx_rx_clk)
     su->CTRLA.reg |= SERCOM_USART_CTRLA_ENABLE;
 }
 
-struct sercom_buffer* usart_buffers[CONFIG_SERCOMS] = { NULL }; 
+struct usart_buffer* usart_buffers[CONFIG_SERCOMS] = { NULL }; 
 
 void
 usart_buffer_handler(uint32_t sercom_id) {
-
+    SercomUsart *su = &sercom_get_by_id(sercom_id)->USART;
+    uint32_t status = su->INTFLAG.reg;
+    struct usart_buffer* buffer = usart_buffers[sercom_id];
+    if (status & SERCOM_USART_INTFLAG_RXC) {
+        // Handle recieved bytes
+        while (buffer->rx.len >= buffer->rx.maxlen) {} // Wait for room
+        int32_t buffer_end = (buffer->rx.start + (buffer->rx.len ++)) % buffer->rx.maxlen;
+        buffer->rx.data[buffer_end] = su->DATA.reg;
+    }
+    if (status & SERCOM_USART_INTFLAG_DRE) {
+        // TX Data register has been emptied
+        if (buffer->tx.len > 0) {
+            // Data available to transmit
+            su->DATA.reg = buffer->tx.data[buffer->tx.start ++];
+            buffer->tx.start %= buffer->tx.maxlen;
+            buffer->tx.len --;
+        } else {
+            // Data depleted
+            // Disable further TX interrupts
+            su->INTENCLR.reg = SERCOM_USART_INTENCLR_DRE;
+        }
+    }
 }
 
 struct usart_config
-usart_setup(uint32_t bus, uint8_t mode, uint32_t rate, struct sercom_buffer* buffer)
+usart_setup(uint32_t bus, uint8_t mode, uint32_t rate, struct usart_buffer* buffer)
 {
     uint32_t tx_rx_clk = sercom_usart_pins(bus, mode);
     // Enable serial clock
@@ -67,7 +88,10 @@ usart_setup(uint32_t bus, uint8_t mode, uint32_t rate, struct sercom_buffer* buf
     // Enable IRQs
     set_sercom_interrupt(bus, usart_buffer_handler);
     usart_buffers[bus] = buffer;
-    return (struct usart_config){ .su = su, .baud = baud};
+    if (buffer->rx.maxlen > 0) {
+        su->INTENSET.reg = SERCOM_USART_INTENSET_RXC;
+    }
+    return (struct usart_config){ .su = su, .baud = baud, .buffer = buffer};
 }
 
 /*
@@ -94,14 +118,14 @@ usart_wait(SercomUsart *su)
 */
 
 void
-usart_write(struct usart_config config, uint8_t write_len, uint8_t *write)
+usart_write_unbuffered(struct usart_config config, uint8_t write_len, uint8_t *write)
 {
     SercomUsart *su = (SercomUsart *)config.su;
+    
     while (write_len--) {
         su->DATA.reg = *write++;
         while (!(su->INTFLAG.reg & SERCOM_USART_INTFLAG_DRE));
     }
-
 }
 
 void
@@ -118,12 +142,27 @@ usart_read_unbuffered(struct usart_config config, uint8_t read_len, uint8_t *rea
         *read++ = su->DATA.reg;
     }
 }
-#define container_of(ptr, type, member) ({                      \
-        const typeof( ((type *)0)->member ) *__mptr = (ptr);    \
-        (type *)( (char *)__mptr - offsetof(type,member) );})
 
 void
-usart_set_buffer(struct usart_config config, struct sercom_buffer* buffer, uint32_t* buffer_data, uint8_t buffer_len)
+usart_set_tx_buffer(struct usart_config config, uint32_t* buffer_data, uint8_t buffer_len)
+{
+    // Enables asynchronous reading with a buffer for the handler to put data directly into
+    // Erases the oldest data upon being overflowed
+    // Set buffer_len to 0 to disable
+
+    if (buffer_len > 0) {
+        config.buffer->tx.data = buffer_data;
+        config.buffer->tx.maxlen = buffer_len;
+        config.buffer->tx.start = 0;
+        config.buffer->tx.len = 0;
+        // Replace irq with dma?
+    } else {
+        config.buffer->tx.maxlen = 0;
+    }
+}
+
+void
+usart_set_rx_buffer(struct usart_config config, uint32_t* buffer_data, uint8_t buffer_len)
 {
     // Enables asynchronous reading with a buffer for the handler to put data directly into
     // Erases the oldest data upon being overflowed
@@ -132,44 +171,62 @@ usart_set_buffer(struct usart_config config, struct sercom_buffer* buffer, uint3
     SercomUsart *su = (SercomUsart *)config.su;
 
     if (buffer_len > 0) {
-        buffer->data = buffer_data;
-        buffer->len = buffer_len;
-        buffer->start = 0;
-        buffer->end = 0;
-        // Enable irqs
+        config.buffer->rx.data = buffer_data;
+        config.buffer->rx.maxlen = buffer_len;
+        config.buffer->rx.start = 0;
+        config.buffer->rx.len = 0;
+        // Enable RX interrupts
         su->INTENSET.reg = SERCOM_USART_INTENSET_RXC;
         // Replace irq with dma?
     } else {
-        buffer->len = 0;
-        su->INTENCLR.reg = SERCOM_USART_INTENSET_RXC;
+        config.buffer->rx.maxlen = 0;
+        // Disable RX interrupts
+        su->INTENCLR.reg = SERCOM_USART_INTENCLR_RXC;
+    }
+}
+
+void
+usart_write(struct usart_config config, uint8_t write_len, uint8_t *write)
+{
+    if (config.buffer->tx.maxlen == 0) {
+        return usart_write_unbuffered(config, write_len, write);
+    }
+
+    // Write data to buffer until full
+    while (write_len--) {
+        while (config.buffer->tx.len >= config.buffer->tx.maxlen); // Pause if the buffer is full for some data to be transmitted
+        uint32_t buffer_end = (config.buffer->tx.start + (config.buffer->tx.len ++)) % config.buffer->tx.maxlen;
+        config.buffer->tx.data[buffer_end] = *write++;
+    }
+
+    SercomUsart *su = (SercomUsart *)config.su;
+
+    if (config.buffer->tx.len > 0) {
+        // Data available to transmit
+        su->INTENSET.reg = SERCOM_USART_INTENSET_DRE;
+
+        su->DATA.reg = config.buffer->tx.data[config.buffer->tx.start ++];
+        config.buffer->tx.start %= config.buffer->tx.maxlen;
+        config.buffer->tx.len --;
     }
 }
 
 void
 usart_read(struct usart_config config, uint8_t read_len, uint8_t *read)
 {
-    SercomUsart *su = (SercomUsart *)config.su;
-    int i = 0;
-
+    if (config.buffer->rx.maxlen == 0) {
+        return usart_read_unbuffered(config, read_len, read);
+    }
     // Read buffered data
-    for (; i < read_len && config.buffer.start != config.buffer.end; i++) {
+    for (int i = 0; i < read_len; i++) {
+        while (config.buffer->rx.len > 0); // Pause if the buffer is empty for more data to be recieved
         // for (int j = 0; j < 4 && i < read_len; j++, i++) {
         //     // Splitting 32 bit data into 8 bit data
         //     *read++ = (uint8_t)(*(config.buffer.data + config.buffer.start) >> (j * 4) & 0xff);
         // }
-        *read++ = *(config.buffer.data + config.buffer.start);
-        config.buffer.start++;
-        config.buffer.start %= config.buffer.len;
-    }
-
-    // If buffer runs out, wait for more data to arrive
-    for (; i < read_len; i++) {
-        while (!(su->INTFLAG.reg & SERCOM_USART_INTFLAG_RXC));
-        // for (int j = 0; j < 4 && i < read_len; j++, i++) {
-        //     // Splitting 32 bit data into 8 bit data
-        //     *read++ = (uint8_t)(su->DATA.reg >> (j * 4) & 0xff);
-        // }
-        *read++ = su->DATA.reg;
-        // TODO: Debug here to figure out what is happening between data sizes
+        *read++ = *(config.buffer->rx.data + config.buffer->rx.start);
+        config.buffer->rx.start++;
+        config.buffer->rx.start %= config.buffer->rx.maxlen;
+        config.buffer->rx.len--;
     }
 }

@@ -49,6 +49,14 @@ sercom_enable_pclock(uint32_t sercom_id)
     return sb->sercom;
 }
 
+Sercom *
+sercom_get_by_id(uint32_t sercom_id)
+{
+    if (sercom_id >= ARRAY_SIZE(sercoms))
+        shutdown("Invalid SERCOM bus");
+    return sercoms[sercom_id].sercom;
+}
+
 uint32_t
 sercom_get_pclock_frequency(uint32_t sercom_id)
 {

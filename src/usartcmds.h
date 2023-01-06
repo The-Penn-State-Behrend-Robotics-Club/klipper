@@ -6,6 +6,7 @@
 
 struct usartdev_s {
     struct usart_config usart_config;
+    struct usart_buffer buffer;
     uint8_t flags;
 };
 

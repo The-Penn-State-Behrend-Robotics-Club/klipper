@@ -15,9 +15,18 @@ class ManualRoboClaw:
         # Register commands
         name = config.get_name().split()[-1]
         gcode = self.printer.lookup_object("gcode")
+        gcode.register_mux_command("USART_TEST_WRITE", "DRIVER", name,
+                                   self.cmd_USART_TEST_WRITE,
+                                   desc=self.cmd_USART_TEST_WRITE_help)
+        
         gcode.register_mux_command("USART_TEST", "DRIVER", name,
                                    self.cmd_USART_TEST,
                                    desc=self.cmd_USART_TEST_help)
+    
+    cmd_USART_TEST_WRITE_help = "Send test data on a USART bus"
+    def cmd_USART_TEST_WRITE(self, gcmd):
+        data = gcmd.get("DATA")
+        self.usart.usart_write(data)
     
     cmd_USART_TEST_help = "Send test data on a USART bus"
     def cmd_USART_TEST(self, gcmd):
