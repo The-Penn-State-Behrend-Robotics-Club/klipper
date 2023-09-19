@@ -5,7 +5,7 @@
 // This file may be distributed under the terms of the GNU GPLv3 license.
 
 #include <stdlib.h>
-#include "internal.h" // enalbe_pclock
+#include "internal.h" // enable_pclock
 #include "gpio.h" // uart_setup
 #include "command.h" // output
 
@@ -34,6 +34,26 @@ usart_init(uint32_t bus, SercomUsart *su, uint32_t baud, uint32_t tx_rx_clk)
     // RUNSTDBY run in standby (Default)
     // MODE SERCOM mode is 0 for external clock source (sync client), 1 for internal clock source (sync host or async)
 
+    // CTRLB Stuff:
+    // LINCMD (LIN stuff)
+    // RXEN rx enable is 0 for disabled, 1 for enabled; default disabled
+    // TXEN tx enable is 0 for disabled, 1 for enabled; default disabled
+    // PMODE parity mode is 0 for even parity bit, 1 for odd parity bit
+    // ENC encoding format is 0 for no encoding, 1 for IrDA encoding
+    // SFDE start of frame detection enable is 0 for disabled, 1 for enabled
+    // COLDEN collision detection enable is 0 for disabled, 1 for enabled
+    // SBMODE stop bit mode is 0 for one tx stop bit, 1 for two tx stop bits
+    // CHSIZE chacter size; default is 8 bits, can be set 5-9
+
+    // CTRLC Stuff:
+    // DATA32B data register RW control; 0 is CHSIZE for both, low bit controls write, high bit controls read
+    // MAXITER (ISO7816 T=0 mode stuff)
+    // DSNACK (ISO7816 T=0 mode stuff)
+    // INACK (ISO7816 T=0 mode stuff)
+    // HDRDLY (LIN stuff)
+    // BRKLEN (LIN stuff)
+    // GTIME guard time in RS485 mode
+
     // Configure usart
     su->CTRLA.reg = 0;
     uint32_t ctrla = (SERCOM_USART_CTRLA_MODE(1)
@@ -56,7 +76,7 @@ usart_buffer_handler(uint32_t sercom_id) {
     uint32_t status = su->INTFLAG.reg;
     struct usart_buffer* buffer = usart_buffers[sercom_id];
     if (status & SERCOM_USART_INTFLAG_RXC) {
-        // Handle recieved bytes
+        // Handle recieved bytess
         while (buffer->rx.len >= buffer->rx.maxlen) {} // Wait for room
         int32_t buffer_end = (buffer->rx.start + (buffer->rx.len ++)) % buffer->rx.maxlen;
         buffer->rx.data[buffer_end] = su->DATA.reg;
@@ -144,7 +164,7 @@ usart_read_unbuffered(struct usart_config config, uint8_t read_len, uint8_t *rea
 }
 
 void
-usart_set_tx_buffer(struct usart_config config, uint32_t* buffer_data, uint8_t buffer_len)
+usart_set_tx_buffer(struct usart_config config, uint8_t* buffer_data, uint8_t buffer_len)
 {
     // Enables asynchronous reading with a buffer for the handler to put data directly into
     // Erases the oldest data upon being overflowed
@@ -162,7 +182,7 @@ usart_set_tx_buffer(struct usart_config config, uint32_t* buffer_data, uint8_t b
 }
 
 void
-usart_set_rx_buffer(struct usart_config config, uint32_t* buffer_data, uint8_t buffer_len)
+usart_set_rx_buffer(struct usart_config config, uint8_t* buffer_data, uint8_t buffer_len)
 {
     // Enables asynchronous reading with a buffer for the handler to put data directly into
     // Erases the oldest data upon being overflowed
