@@ -18,13 +18,15 @@ static const struct tcc_info_s tcc_info[] = {
     { TCC0, TCC0_GCLK_ID, ID_TCC0 },
     { TCC1, TCC1_GCLK_ID, ID_TCC1 },
     { TCC2, TCC2_GCLK_ID, ID_TCC2 },
-    #if CONFIG_MACH_SAMD51J19 || CONFIG_MACH_SAMD51N19 || CONFIG_MACH_SAMD51P19 || CONFIG_MACH_SAME51J19
+    #if CONFIG_MACH_SAMD51J19 || CONFIG_MACH_SAMD51N19 \
+     || CONFIG_MACH_SAMD51P19 || CONFIG_MACH_SAMD51P20 \
+     || CONFIG_MACH_SAME51J19 || CONFIG_MACH_SAME54P20
     { TCC3, TCC3_GCLK_ID, ID_TCC3 },
     { TCC4, TCC4_GCLK_ID, ID_TCC4 },
     #endif
 };
 
-#if CONFIG_MACH_SAMD51 || CONFIG_MACH_SAME51
+#if CONFIG_MACH_SAMX5
 #define TC_OFFSET 5
 
 // Available TC devices
@@ -37,10 +39,11 @@ static const struct tc_info_s tc_info[] = {
     { TC1, TC1_GCLK_ID, ID_TC1 },
     { TC2, TC2_GCLK_ID, ID_TC2 },
     { TC3, TC3_GCLK_ID, ID_TC3 },
-    #if CONFIG_MACH_SAMD51J19 || CONFIG_MACH_SAMD51N19 || CONFIG_MACH_SAMD51P20 || CONFIG_MACH_SAME51J19
+    #if CONFIG_MACH_SAMD51J19 || CONFIG_MACH_SAMD51N19 \
+     || CONFIG_MACH_SAMD51P20 || CONFIG_MACH_SAME51J19
     { TC4, TC4_GCLK_ID, ID_TC4 },
     { TC5, TC5_GCLK_ID, ID_TC5 },
-    #if CONFIG_MACH_SAMD51N19 || CONFIG_MACH_SAMD51P20
+    #if CONFIG_MACH_SAMD51N19 || CONFIG_MACH_SAMD51P20 || CONFIG_MACH_SAME54P20
     { TC6, TC6_GCLK_ID, ID_TC6 },
     { TC7, TC7_GCLK_ID, ID_TC7 },
     #endif
@@ -53,7 +56,7 @@ struct gpio_pwm_info {
     uint8_t gpio, ptype, tcc, channel;
 };
 static const struct gpio_pwm_info pwm_regs[] = {
-#if CONFIG_MACH_SAMD21
+#if CONFIG_MACH_SAMC21 || CONFIG_MACH_SAMD21
     { GPIO('A', 4),  'E', 0, 0 },
     { GPIO('A', 5),  'E', 0, 1 },
     { GPIO('A', 6),  'E', 1, 0 },
@@ -74,7 +77,7 @@ static const struct gpio_pwm_info pwm_regs[] = {
     { GPIO('A', 31), 'E', 1, 1 },
     { GPIO('B', 30), 'E', 0, 0 },
     { GPIO('B', 31), 'E', 0, 1 },
-#elif CONFIG_MACH_SAMD51 || CONFIG_MACH_SAME51
+#elif CONFIG_MACH_SAMX5
     { GPIO('A', 4),  'E', 5, 0 }, // TC
     { GPIO('A', 6),  'E', 6, 0 }, // TC
     { GPIO('A', 12), 'E', 7, 0 }, // TC
@@ -143,7 +146,7 @@ tcc_setup(uint8_t tcc_id, uint8_t channel, uint32_t cycle_time)
     // Return pwm access
     #if CONFIG_MACH_SAMD21
     return (struct gpio_pwm) { (void*)&tcc->CCB[channel].reg };
-    #elif CONFIG_MACH_SAMD51 || CONFIG_MACH_SAME51
+    #elif CONFIG_MACH_SAMC21 || CONFIG_MACH_SAMX5
     return (struct gpio_pwm) { (void*)&tcc->CCBUF[channel].reg };
     #endif
 }
@@ -191,7 +194,7 @@ gpio_pwm_setup(uint8_t pin, uint32_t cycle_time, uint8_t val)
 
     // Initialize pwm hardware
     #ifdef TC_OFFSET
-    if (p->tcc < TC_OFFSET) // TCC's end at 4, TC's start at 5
+    if (p->tcc < TC_OFFSET) // TCC's end at 4, TC's start at 5 for SAMX5
     #endif
         g = tcc_setup(p->tcc, p->channel, cycle_time);
     #ifdef TC_OFFSET
