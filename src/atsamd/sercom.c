@@ -74,7 +74,7 @@ struct sercom_pad {
 };
 
 static const struct sercom_pad sercom_pads[] = {
-#if CONFIG_MACH_SAMD21
+#if CONFIG_MACH_SAMX2
     { 0, GPIO('A', 8), 0, 'C'},
     { 0, GPIO('A', 9), 1, 'C'},
     { 0, GPIO('A', 10), 2, 'C'},
@@ -468,7 +468,7 @@ struct sercom_spi_map {
 static const struct sercom_spi_map sercom_spi[] = {
     { 0, 1, 0 },
     { 3, 1, 2 },
-#if CONFIG_MACH_SAMD21
+#if CONFIG_MACH_SAMX2
     { 2, 3, 1 },
     { 0, 3, 3 },
 #endif

@@ -43,6 +43,10 @@ lookup_clock_line(uint32_t periph_base)
                               .bit = 1 << pos};
 
     } else {
+        if (periph_base == ADC12_COMMON_BASE)
+            return (struct cline){.en = &RCC->AHB2ENR,
+                                  .rst = &RCC->AHB2RSTR,
+                                  .bit = RCC_AHB2ENR_ADC12EN};
         uint32_t pos = (periph_base - AHB2PERIPH_BASE) / 0x400;
         return (struct cline){.en = &RCC->AHB2ENR,
                               .rst = &RCC->AHB2RSTR,
@@ -101,6 +105,9 @@ enable_clock_stm32g4(void)
         enable_pclock(CRS_BASE);
         CRS->CR |= CRS_CR_AUTOTRIMEN | CRS_CR_CEN;
     }
+
+    // Use PCLK for FDCAN
+    RCC->CCIPR = 2 << RCC_CCIPR_FDCANSEL_Pos;
 }
 
 // Main clock setup called at chip startup
